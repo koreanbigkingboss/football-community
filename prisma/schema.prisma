@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  password    String?
+  name        String
+  image       String?
+  level       Int          @default(1)
+  points      Int          @default(1000)
+  role        Role         @default(USER)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  posts       Post[]
+  comments    Comment[]
+  accounts    Account[]
+  sessions    Session[]
+  predictions Prediction[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Board {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  order       Int     @default(0)
+  posts       Post[]
+}
+
+model Post {
+  id        String    @id @default(cuid())
+  title     String
+  content   String
+  boardId   String
+  authorId  String
+  views     Int       @default(0)
+  likes     Int       @default(0)
+  isPinned  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  board     Board     @relation(fields: [boardId], references: [id])
+  author    User      @relation(fields: [authorId], references: [id])
+  comments  Comment[]
+  media     Media[]
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  content   String
+  postId    String
+  authorId  String
+  parentId  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id])
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  url       String
+  type      String
+  postId    String?
+  createdAt DateTime @default(now())
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: SetNull)
+}
+
+// ─── 배팅 시스템 ────────────────────────────────────────────────
+
+model Match {
+  id          String      @id @default(cuid())
+  homeTeam    String
+  awayTeam    String
+  league      String
+  matchTime   DateTime
+  status      MatchStatus @default(UPCOMING)
+  homeScore   Int?
+  awayScore   Int?
+  scorers     String[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  predictions Prediction[]
+}
+
+model Prediction {
+  id               String           @id @default(cuid())
+  userId           String
+  matchId          String
+  predictWinner    String           // "home" | "away" | "draw"
+  predictHomeScore Int?
+  predictAwayScore Int?
+  predictScorer    String?
+  pointsBet        Int
+  pointsResult     Int?
+  status           PredictionStatus @default(PENDING)
+  createdAt        DateTime         @default(now())
+  user             User             @relation(fields: [userId], references: [id])
+  match            Match            @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, matchId])
+}
+
+enum MatchStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+  CANCELLED
+}
+
+enum PredictionStatus {
+  PENDING
+  WON
+  PARTIAL
+  LOST
+}
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
