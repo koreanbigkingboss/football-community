@@ -34,7 +34,7 @@ async function fetchHighlights(): Promise<Highlight[]> {
   }
 }
 
-export const revalidate = 1800;
+export const dynamic = "force-dynamic";
 
 export default async function HighlightPage() {
   const highlights = await fetchHighlights();

@@ -43,7 +43,7 @@ async function fetchTransfers(): Promise<Transfer[]> {
   }
 }
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 export default async function TransferPage() {
   const transfers = await fetchTransfers();

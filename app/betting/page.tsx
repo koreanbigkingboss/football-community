@@ -13,7 +13,7 @@ function formatKST(date: Date) {
   }).format(date);
 }
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function BettingPage() {
   const [session, matches] = await Promise.all([

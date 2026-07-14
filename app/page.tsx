@@ -9,7 +9,7 @@ const BOARD_LABEL: Record<string, string> = {
   bundesliga: "분데스", seriea: "세리에A", ucl: "UCL", transfer: "이적", highlight: "하이라이트",
 };
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [recentPosts, hotPosts, noticePosts] = await Promise.all([
