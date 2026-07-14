@@ -1,43 +1,65 @@
 import Sidebar from "@/app/components/Sidebar";
 import HighlightPlayer from "./HighlightPlayer";
 
-type Highlight = {
-  id: string;
+export const dynamic = "force-dynamic";
+
+type VideoItem = {
+  videoId: string;
   title: string;
   thumbnail: string;
-  embed: string;
-  competition: string;
-  date: string;
-  url: string;
+  published: string;
+  channel: string;
 };
 
-async function fetchHighlights(): Promise<Highlight[]> {
+const CHANNELS = [
+  { id: "UCqZQlzSHbVJrwrn5XvzrzcA", name: "Premier League" },
+  { id: "UCwc7FMSzr8e-Vo72V8Rp63A", name: "UEFA" },
+  { id: "UCTFNGq5eMKRKN0i7h1vPSMw", name: "La Liga" },
+  { id: "UCGSbmA1eLbBjz_cKlFfJBqg", name: "Bundesliga" },
+  { id: "UCKSFuSRoHfGnMGTRjPZK9BA", name: "Champions League" },
+];
+
+async function fetchChannelVideos(channelId: string, channelName: string): Promise<VideoItem[]> {
   try {
-    const res = await fetch("https://www.scorebat.com/video-api/v3/feed/", {
-      next: { revalidate: 1800 },
-    });
+    const res = await fetch(
+      `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
+      { next: { revalidate: 1800 } }
+    );
     if (!res.ok) return [];
-    const data = await res.json();
-    const list: { id?: string; title?: string; thumbnail?: string; embed?: string; competition?: { name?: string }; date?: string; matchviewUrl?: string }[] =
-      Array.isArray(data) ? data : data?.response ?? [];
-    return list.slice(0, 20).map((item) => ({
-      id: item.id ?? item.title ?? Math.random().toString(),
-      title: item.title ?? "제목 없음",
-      thumbnail: item.thumbnail ?? "",
-      embed: item.embed ?? "",
-      competition: item.competition?.name ?? "축구",
-      date: item.date ? new Date(item.date).toLocaleDateString("ko-KR") : "",
-      url: item.matchviewUrl ?? "",
-    }));
+    const text = await res.text();
+
+    const entries = text.match(/<entry>([\s\S]*?)<\/entry>/g) ?? [];
+    return entries.slice(0, 4).flatMap((entry) => {
+      const videoId = (entry.match(/<yt:videoId>(.*?)<\/yt:videoId>/) ?? [])[1];
+      const rawTitle = (entry.match(/<title>(.*?)<\/title>/) ?? [])[1] ?? "";
+      const published = (entry.match(/<published>(.*?)<\/published>/) ?? [])[1] ?? "";
+
+      if (!videoId) return [];
+      const title = rawTitle
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/<!\[CDATA\[(.*?)\]\]>/g, "$1");
+
+      return [{
+        videoId,
+        title,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        published: published ? new Date(published).toLocaleDateString("ko-KR") : "",
+        channel: channelName,
+      }];
+    });
   } catch {
     return [];
   }
 }
 
-export const dynamic = "force-dynamic";
-
 export default async function HighlightPage() {
-  const highlights = await fetchHighlights();
+  const results = await Promise.all(
+    CHANNELS.map((c) => fetchChannelVideos(c.id, c.name))
+  );
+  const highlights = results.flat().slice(0, 20);
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-4 flex gap-4">
@@ -46,18 +68,17 @@ export default async function HighlightPage() {
         <div className="bg-white rounded-lg border border-[#e2e8f0] overflow-hidden">
           <div className="px-4 py-3 border-b border-[#e2e8f0]">
             <h1 className="font-bold text-[#0f172a] text-lg">하이라이트</h1>
-            <p className="text-xs text-[#64748b] mt-0.5">최근 축구 경기 하이라이트</p>
+            <p className="text-xs text-[#64748b] mt-0.5">YouTube 공식 채널 최신 영상</p>
           </div>
 
           {highlights.length === 0 ? (
-            <div className="px-4 py-16 text-center">
-              <div className="text-[#64748b] text-sm">하이라이트를 불러오는 중입니다...</div>
-              <div className="text-xs text-[#94a3b8] mt-2">ScoreBat API 연결 중</div>
+            <div className="px-4 py-16 text-center text-[#64748b] text-sm">
+              하이라이트를 불러오는 중입니다...
             </div>
           ) : (
             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {highlights.map((h) => (
-                <HighlightPlayer key={h.id} highlight={h} />
+                <HighlightPlayer key={h.videoId} highlight={h} />
               ))}
             </div>
           )}

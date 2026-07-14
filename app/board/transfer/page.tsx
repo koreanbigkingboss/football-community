@@ -1,63 +1,85 @@
 import Sidebar from "@/app/components/Sidebar";
 
+export const dynamic = "force-dynamic";
+
 type Transfer = {
   id: string;
-  playerName: string;
+  name: string;
   from: string;
   to: string;
   fee: string;
-  season: string;
-  playerImage?: string;
+  date: string;
+  position: string;
 };
 
-async function fetchTransfers(): Promise<Transfer[]> {
+// 주요 구단 ID (Real Madrid, Man City, Barcelona, Arsenal, PSG, Bayern, Liverpool, Chelsea)
+const TOP_CLUB_IDS = ["418", "281", "131", "11", "583", "27", "31", "631"];
+
+async function fetchClubTransfers(clubId: string): Promise<Transfer[]> {
   try {
     const res = await fetch(
-      "https://transfermarkt-api.fly.dev/transfers/recents?top=20",
+      `https://transfermarkt-api.fly.dev/clubs/${clubId}/transfers`,
       { next: { revalidate: 3600 } }
     );
     if (!res.ok) return [];
     const data = await res.json();
-    const list = data?.transfers ?? data?.items ?? [];
-    return list.map(
-      (t: {
-        id?: string;
-        playerName?: string;
-        player?: { name?: string; id?: string; imageUrl?: string };
-        fromClub?: { name?: string };
-        toClub?: { name?: string };
-        fee?: { value?: string; currency?: string };
-        season?: string;
-      }) => ({
-        id: t.id ?? t.player?.id ?? Math.random().toString(),
-        playerName: t.playerName ?? t.player?.name ?? "Unknown",
-        from: t.fromClub?.name ?? "Unknown",
-        to: t.toClub?.name ?? "Unknown",
-        fee: t.fee?.value ? `${t.fee.currency ?? "€"}${t.fee.value}` : "미공개",
-        season: t.season ?? "-",
-        playerImage: t.player?.imageUrl,
-      })
-    );
+
+    type TmTransfer = {
+      id?: string;
+      name?: string;
+      from?: { name?: string };
+      to?: { name?: string };
+      fee?: string;
+      date?: string;
+      position?: string;
+    };
+
+    const arrivals: TmTransfer[] = data?.arrivals ?? [];
+    const departures: TmTransfer[] = data?.departures ?? [];
+    const clubName: string = data?.name ?? "";
+
+    const toItems = arrivals.slice(0, 2).map((t) => ({
+      id: `${clubId}-a-${t.id ?? t.name}`,
+      name: t.name ?? "Unknown",
+      from: t.from?.name ?? "-",
+      to: clubName,
+      fee: t.fee ?? "미공개",
+      date: t.date ?? "",
+      position: t.position ?? "",
+    }));
+
+    const fromItems = departures.slice(0, 1).map((t) => ({
+      id: `${clubId}-d-${t.id ?? t.name}`,
+      name: t.name ?? "Unknown",
+      from: clubName,
+      to: t.to?.name ?? "-",
+      fee: t.fee ?? "미공개",
+      date: t.date ?? "",
+      position: t.position ?? "",
+    }));
+
+    return [...toItems, ...fromItems];
   } catch {
     return [];
   }
 }
 
-export const dynamic = "force-dynamic";
-
 export default async function TransferPage() {
-  const transfers = await fetchTransfers();
+  const results = await Promise.all(TOP_CLUB_IDS.map(fetchClubTransfers));
+  const transfers = results
+    .flat()
+    .filter((t) => t.name !== "Unknown")
+    .sort((a, b) => (b.date > a.date ? 1 : -1))
+    .slice(0, 30);
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-4 flex gap-4">
       <Sidebar />
       <div className="flex-1 min-w-0">
         <div className="bg-white rounded-lg border border-[#e2e8f0] overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#e2e8f0] flex items-center justify-between">
-            <div>
-              <h1 className="font-bold text-[#0f172a] text-lg">이적시장</h1>
-              <p className="text-xs text-[#64748b] mt-0.5">Transfermarkt 오피셜 이적</p>
-            </div>
+          <div className="px-4 py-3 border-b border-[#e2e8f0]">
+            <h1 className="font-bold text-[#0f172a] text-lg">이적시장</h1>
+            <p className="text-xs text-[#64748b] mt-0.5">Transfermarkt 오피셜 이적</p>
           </div>
 
           {transfers.length === 0 ? (
@@ -67,43 +89,33 @@ export default async function TransferPage() {
             </div>
           ) : (
             <>
-              <div className="hidden sm:grid grid-cols-[2fr_2fr_2fr_1fr_1fr] px-4 py-2 bg-[#f8fafc] border-b border-[#e2e8f0] text-xs text-[#64748b] font-medium">
+              <div className="hidden sm:grid grid-cols-[2fr_2fr_2fr_1fr] px-4 py-2 bg-[#f8fafc] border-b border-[#e2e8f0] text-xs text-[#64748b] font-medium">
                 <span>선수</span>
-                <span>출발 클럽</span>
-                <span>도착 클럽</span>
-                <span className="text-center">이적료</span>
-                <span className="text-center">시즌</span>
+                <span>이전 구단 → 새 구단</span>
+                <span>날짜</span>
+                <span className="text-right">이적료</span>
               </div>
               <ul className="divide-y divide-[#f1f5f9]">
                 {transfers.map((t) => (
                   <li key={t.id} className="flex items-center gap-3 px-4 py-3">
-                    {t.playerImage ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={t.playerImage}
-                        alt={t.playerName}
-                        className="w-8 h-8 rounded-full object-cover shrink-0 bg-[#f1f5f9]"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-[#f1f5f9] shrink-0 flex items-center justify-center text-[#94a3b8] text-xs">
-                        👤
-                      </div>
-                    )}
-                    <div className="grid flex-1 sm:grid-cols-[2fr_2fr_2fr_1fr_1fr] items-center gap-1">
-                      <span className="font-medium text-[#1e293b] text-sm truncate">{t.playerName}</span>
-                      <div className="hidden sm:flex items-center gap-1 text-sm text-[#475569] truncate">
-                        <span className="text-red-400">→</span>
-                        {t.from}
+                    <div className="w-8 h-8 rounded-full bg-[#f1f5f9] shrink-0 flex items-center justify-center text-[#94a3b8] text-sm font-bold">
+                      {t.name[0]}
+                    </div>
+                    <div className="flex-1 sm:grid sm:grid-cols-[2fr_2fr_2fr_1fr] items-center gap-2 min-w-0">
+                      <div>
+                        <div className="font-medium text-[#1e293b] text-sm truncate">{t.name}</div>
+                        {t.position && <div className="text-xs text-[#94a3b8]">{t.position}</div>}
                       </div>
                       <div className="hidden sm:flex items-center gap-1 text-sm text-[#475569] truncate">
-                        <span className="text-[#16a34a]">→</span>
-                        {t.to}
+                        <span className="truncate">{t.from}</span>
+                        <span className="text-[#16a34a] shrink-0">→</span>
+                        <span className="truncate">{t.to}</span>
                       </div>
                       <div className="sm:hidden text-xs text-[#64748b] truncate">
                         {t.from} → {t.to}
                       </div>
-                      <span className="hidden sm:block text-center text-sm font-medium text-[#0f172a]">{t.fee}</span>
-                      <span className="hidden sm:block text-center text-xs text-[#64748b]">{t.season}</span>
+                      <div className="hidden sm:block text-sm text-[#64748b]">{t.date}</div>
+                      <div className="hidden sm:block text-sm font-medium text-[#0f172a] text-right">{t.fee}</div>
                     </div>
                   </li>
                 ))}

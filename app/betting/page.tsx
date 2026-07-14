@@ -3,25 +3,89 @@ import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import Sidebar from "@/app/components/Sidebar";
 
+export const dynamic = "force-dynamic";
+
+const LEAGUE_IDS = [
+  { id: 4328, name: "EPL" },
+  { id: 4335, name: "라리가" },
+  { id: 4331, name: "분데스리가" },
+  { id: 4332, name: "세리에A" },
+  { id: 4480, name: "챔피언스리그" },
+  { id: 4456, name: "K리그1" },
+];
+
+type SportsDBEvent = {
+  idEvent: string;
+  strHomeTeam: string;
+  strAwayTeam: string;
+  strLeague: string;
+  dateEvent: string;
+  strTime: string | null;
+};
+
+async function syncUpcomingMatches() {
+  try {
+    const results = await Promise.all(
+      LEAGUE_IDS.map(async ({ id, name }) => {
+        const res = await fetch(
+          `https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php?id=${id}`,
+          { next: { revalidate: 3600 } }
+        );
+        if (!res.ok) return [];
+        const data = await res.json();
+        return ((data.events as SportsDBEvent[]) || []).slice(0, 3).map((e) => ({
+          ...e,
+          leagueName: name,
+        }));
+      })
+    );
+
+    const events = results.flat();
+    for (const e of events) {
+      const matchTime = new Date(`${e.dateEvent}T${e.strTime ?? "12:00:00"}`);
+      if (isNaN(matchTime.getTime())) continue;
+
+      const existing = await db.match.findFirst({
+        where: { homeTeam: e.strHomeTeam, awayTeam: e.strAwayTeam },
+      });
+      if (!existing) {
+        await db.match.create({
+          data: {
+            homeTeam: e.strHomeTeam,
+            awayTeam: e.strAwayTeam,
+            league: e.leagueName,
+            matchTime,
+            status: "UPCOMING",
+          },
+        });
+      }
+    }
+  } catch {
+    // 외부 API 실패 시 조용히 무시
+  }
+}
+
 function formatKST(date: Date) {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "long",
     day: "numeric",
+    weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Asia/Seoul",
   }).format(date);
 }
 
-export const dynamic = "force-dynamic";
-
 export default async function BettingPage() {
+  await syncUpcomingMatches();
+
   const [session, matches] = await Promise.all([
     auth(),
     db.match.findMany({
       where: { status: { in: ["UPCOMING", "LIVE"] } },
       include: { _count: { select: { predictions: true } } },
       orderBy: { matchTime: "asc" },
+      take: 30,
     }),
   ]);
 
@@ -33,8 +97,9 @@ export default async function BettingPage() {
       })
     : [];
   const bettedMatchIds = new Set(myPredictions.map((p) => p.matchId));
-
-  const dbUser = userId ? await db.user.findUnique({ where: { id: userId }, select: { points: true } }) : null;
+  const dbUser = userId
+    ? await db.user.findUnique({ where: { id: userId }, select: { points: true } })
+    : null;
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-4 flex gap-4">
@@ -44,7 +109,7 @@ export default async function BettingPage() {
           <div className="px-4 py-3 border-b border-[#e2e8f0] flex items-center justify-between">
             <div>
               <h1 className="font-bold text-[#0f172a] text-lg">포인트 배팅</h1>
-              <p className="text-xs text-[#64748b] mt-0.5">경기 결과를 예측하고 포인트를 획득하세요</p>
+              <p className="text-xs text-[#64748b] mt-0.5">실제 경기 결과를 예측하고 포인트를 획득하세요</p>
             </div>
             {dbUser && (
               <div className="text-right">
@@ -56,9 +121,9 @@ export default async function BettingPage() {
 
           <div className="px-4 py-3 bg-[#f8fafc] border-b border-[#e2e8f0] text-sm text-[#475569]">
             <span className="font-medium text-[#0f172a]">배팅 규칙:</span>{" "}
-            승리팀 예측 시 <span className="text-[#16a34a] font-medium">2배</span>，
-            정확한 스코어 예측 시 <span className="text-[#16a34a] font-medium">5배</span>，
-            득점자 추가 예측 시 <span className="text-[#16a34a] font-medium">+1배</span> 보너스
+            승리팀 예측 <span className="text-[#16a34a] font-medium">2배</span> ·
+            정확한 스코어 <span className="text-[#16a34a] font-medium">5배</span> ·
+            득점자 추가 <span className="text-[#16a34a] font-medium">+1배</span>
           </div>
 
           {matches.length === 0 ? (
@@ -69,7 +134,6 @@ export default async function BettingPage() {
             <ul className="divide-y divide-[#f1f5f9]">
               {matches.map((match) => {
                 const betted = bettedMatchIds.has(match.id);
-                const isLive = match.status === "LIVE";
                 return (
                   <li key={match.id}>
                     <Link
@@ -77,34 +141,23 @@ export default async function BettingPage() {
                       className="flex items-center gap-4 px-4 py-4 hover:bg-[#f8fafc] transition-colors group"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs text-[#64748b] font-medium">{match.league}</span>
-                          {isLive && (
-                            <span className="text-xs text-white bg-red-500 rounded px-1.5 py-0.5 font-medium">
-                              LIVE
-                            </span>
-                          )}
-                        </div>
+                        <div className="text-xs text-[#64748b] font-medium mb-1">{match.league}</div>
                         <div className="flex items-center gap-3 text-sm font-semibold text-[#1e293b]">
                           <span className="truncate">{match.homeTeam}</span>
-                          <span className="text-[#64748b] font-normal text-xs shrink-0">VS</span>
+                          <span className="text-[#94a3b8] font-normal text-xs shrink-0">VS</span>
                           <span className="truncate">{match.awayTeam}</span>
                         </div>
                         <div className="text-xs text-[#64748b] mt-1">
-                          {formatKST(match.matchTime)} · 배팅 {match._count.predictions}명
+                          {formatKST(match.matchTime)} · {match._count.predictions}명 배팅
                         </div>
                       </div>
-                      <div className="shrink-0 text-right">
+                      <div className="shrink-0">
                         {betted ? (
-                          <span className="text-xs bg-[#dcfce7] text-[#16a34a] px-2 py-1 rounded font-medium">
-                            배팅완료
-                          </span>
+                          <span className="text-xs bg-[#dcfce7] text-[#16a34a] px-2 py-1 rounded font-medium">배팅완료</span>
                         ) : !session?.user ? (
-                          <span className="text-xs text-[#64748b]">로그인 필요</span>
+                          <span className="text-xs text-[#94a3b8]">로그인 필요</span>
                         ) : (
-                          <span className="text-xs bg-[#16a34a] text-white px-2 py-1 rounded group-hover:bg-[#15803d] transition-colors">
-                            배팅하기
-                          </span>
+                          <span className="text-xs bg-[#16a34a] text-white px-2 py-1 rounded group-hover:bg-[#15803d] transition-colors">배팅하기</span>
                         )}
                       </div>
                     </Link>
@@ -115,7 +168,6 @@ export default async function BettingPage() {
           )}
         </div>
 
-        {/* 내 배팅 이력 */}
         {userId && <MyBettingHistory userId={userId} />}
       </div>
     </main>
@@ -125,24 +177,18 @@ export default async function BettingPage() {
 async function MyBettingHistory({ userId }: { userId: string }) {
   const history = await db.prediction.findMany({
     where: { userId },
-    include: { match: { select: { homeTeam: true, awayTeam: true, homeScore: true, awayScore: true, status: true } } },
+    include: {
+      match: { select: { homeTeam: true, awayTeam: true, homeScore: true, awayScore: true, status: true } },
+    },
     orderBy: { createdAt: "desc" },
     take: 10,
   });
-
   if (history.length === 0) return null;
 
-  const statusLabel: Record<string, string> = {
-    PENDING: "진행중",
-    WON: "적중",
-    PARTIAL: "일부적중",
-    LOST: "낙첨",
-  };
+  const statusLabel: Record<string, string> = { PENDING: "진행중", WON: "적중", PARTIAL: "일부적중", LOST: "낙첨" };
   const statusColor: Record<string, string> = {
-    PENDING: "text-[#64748b]",
-    WON: "text-[#16a34a] font-medium",
-    PARTIAL: "text-blue-600 font-medium",
-    LOST: "text-red-500",
+    PENDING: "text-[#64748b]", WON: "text-[#16a34a] font-medium",
+    PARTIAL: "text-blue-600 font-medium", LOST: "text-red-500",
   };
 
   return (
@@ -154,16 +200,13 @@ async function MyBettingHistory({ userId }: { userId: string }) {
         {history.map((p) => (
           <li key={p.id} className="px-4 py-3 flex items-center justify-between text-sm">
             <div>
-              <div className="font-medium text-[#1e293b]">
-                {p.match.homeTeam} vs {p.match.awayTeam}
-              </div>
+              <div className="font-medium text-[#1e293b]">{p.match.homeTeam} vs {p.match.awayTeam}</div>
               <div className="text-xs text-[#64748b] mt-0.5">
-                예측: {p.predictWinner === "home" ? p.match.homeTeam : p.predictWinner === "away" ? p.match.awayTeam : "무승부"}
+                {p.predictWinner === "home" ? p.match.homeTeam : p.predictWinner === "away" ? p.match.awayTeam : "무승부"} 예측
                 {p.predictHomeScore != null && ` (${p.predictHomeScore}:${p.predictAwayScore})`}
-                {p.predictScorer && ` · ${p.predictScorer} 득점`}
               </div>
             </div>
-            <div className="text-right shrink-0">
+            <div className="text-right">
               <div className={statusColor[p.status]}>{statusLabel[p.status]}</div>
               <div className="text-xs text-[#64748b]">
                 -{p.pointsBet.toLocaleString()}P
