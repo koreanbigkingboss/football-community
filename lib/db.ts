@@ -1,10 +1,10 @@
 import { PrismaClient } from "@/app/generated/prisma/client";
-import { PrismaNeon } from "@prisma/adapter-neon";
+import { PrismaNeonHttp } from "@prisma/adapter-neon";
 
 function createPrismaClient() {
-  const adapter = new PrismaNeon({
-    connectionString: process.env.DATABASE_URL ?? "",
-  });
+  const rawUrl = process.env.DATABASE_URL ?? "";
+  const connectionString = rawUrl.replace("&channel_binding=require", "");
+  const adapter = new PrismaNeonHttp(connectionString, {});
   return new PrismaClient({ adapter } as never);
 }
 
