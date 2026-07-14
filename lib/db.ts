@@ -1,20 +1,10 @@
 import { PrismaClient } from "@/app/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import pg from "pg";
+import { PrismaNeon } from "@prisma/adapter-neon";
 
 function createPrismaClient() {
-  // pg 드라이버가 channel_binding을 지원하지 않으므로 제거
-  const rawUrl = process.env.DATABASE_URL ?? "";
-  const connectionString = rawUrl
-    .replace("&channel_binding=require", "")
-    .replace("?channel_binding=require&", "?")
-    .replace("?channel_binding=require", "");
-
-  const pool = new pg.Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
+  const adapter = new PrismaNeon({
+    connectionString: process.env.DATABASE_URL ?? "",
   });
-  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter } as never);
 }
 
