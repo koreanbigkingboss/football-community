@@ -103,18 +103,20 @@ model Media {
 // ─── 배팅 시스템 ────────────────────────────────────────────────
 
 model Match {
-  id          String      @id @default(cuid())
-  homeTeam    String
-  awayTeam    String
-  league      String
-  matchTime   DateTime
-  status      MatchStatus @default(UPCOMING)
-  homeScore   Int?
-  awayScore   Int?
-  scorers     String[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  predictions Prediction[]
+  id             String      @id @default(cuid())
+  homeTeam       String
+  awayTeam       String
+  league         String
+  matchTime      DateTime
+  status         MatchStatus @default(UPCOMING)
+  homeScore      Int?
+  awayScore      Int?
+  scorers        String[]
+  homeTeamBadge  String?
+  awayTeamBadge  String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  predictions    Prediction[]
 }
 
 model Prediction {

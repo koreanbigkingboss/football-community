@@ -21,6 +21,8 @@ type SportsDBEvent = {
   strLeague: string;
   dateEvent: string;
   strTime: string | null;
+  strHomeTeamBadge: string | null;
+  strAwayTeamBadge: string | null;
 };
 
 async function syncUpcomingMatches() {
@@ -56,12 +58,22 @@ async function syncUpcomingMatches() {
             league: e.leagueName,
             matchTime,
             status: "UPCOMING",
+            homeTeamBadge: e.strHomeTeamBadge ?? null,
+            awayTeamBadge: e.strAwayTeamBadge ?? null,
+          },
+        });
+      } else if (!existing.homeTeamBadge && e.strHomeTeamBadge) {
+        await db.match.update({
+          where: { id: existing.id },
+          data: {
+            homeTeamBadge: e.strHomeTeamBadge,
+            awayTeamBadge: e.strAwayTeamBadge ?? null,
           },
         });
       }
     }
   } catch {
-    // 외부 API 실패 시 조용히 무시
+    // 외부 API 실패 시 무시
   }
 }
 
@@ -74,6 +86,31 @@ function formatKST(date: Date) {
     minute: "2-digit",
     timeZone: "Asia/Seoul",
   }).format(date);
+}
+
+function TeamBadge({ src, name }: { src?: string | null; name: string }) {
+  const initial = name.charAt(0).toUpperCase();
+  if (!src) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-[#e2e8f0] flex items-center justify-center text-[#475569] text-xs font-bold shrink-0">
+        {initial}
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name}
+      className="w-8 h-8 object-contain shrink-0"
+      onError={(e) => {
+        const target = e.currentTarget;
+        target.style.display = "none";
+        const sibling = target.nextElementSibling as HTMLElement | null;
+        if (sibling) sibling.style.display = "flex";
+      }}
+    />
+  );
 }
 
 export default async function BettingPage() {
@@ -141,13 +178,21 @@ export default async function BettingPage() {
                       className="flex items-center gap-4 px-4 py-4 hover:bg-[#f8fafc] transition-colors group"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs text-[#64748b] font-medium mb-1">{match.league}</div>
-                        <div className="flex items-center gap-3 text-sm font-semibold text-[#1e293b]">
-                          <span className="truncate">{match.homeTeam}</span>
-                          <span className="text-[#94a3b8] font-normal text-xs shrink-0">VS</span>
-                          <span className="truncate">{match.awayTeam}</span>
+                        <div className="text-xs text-[#64748b] font-medium mb-2">{match.league}</div>
+                        <div className="flex items-center gap-2">
+                          {/* 홈팀 */}
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <TeamBadge src={match.homeTeamBadge} name={match.homeTeam} />
+                            <span className="text-sm font-semibold text-[#1e293b] truncate">{match.homeTeam}</span>
+                          </div>
+                          <span className="text-[#94a3b8] font-normal text-xs shrink-0 px-2">VS</span>
+                          {/* 원정팀 */}
+                          <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+                            <span className="text-sm font-semibold text-[#1e293b] truncate text-right">{match.awayTeam}</span>
+                            <TeamBadge src={match.awayTeamBadge} name={match.awayTeam} />
+                          </div>
                         </div>
-                        <div className="text-xs text-[#64748b] mt-1">
+                        <div className="text-xs text-[#64748b] mt-2">
                           {formatKST(match.matchTime)} · {match._count.predictions}명 배팅
                         </div>
                       </div>

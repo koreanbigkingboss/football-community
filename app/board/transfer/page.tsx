@@ -12,65 +12,93 @@ type Transfer = {
   position: string;
 };
 
-// 주요 구단 ID (Real Madrid, Man City, Barcelona, Arsenal, PSG, Bayern, Liverpool, Chelsea)
-const TOP_CLUB_IDS = ["418", "281", "131", "11", "583", "27", "31", "631"];
+type FotMobRawTransfer = {
+  id?: string | number;
+  player?: { name?: string; position?: string; positionLabel?: string };
+  name?: string;
+  fromTeam?: { name?: string; shortName?: string };
+  toTeam?: { name?: string; shortName?: string };
+  from?: { name?: string } | string;
+  to?: { name?: string } | string;
+  fee?: string | { value?: string; text?: string };
+  transferDate?: string;
+  date?: string;
+  position?: string;
+  type?: string;
+};
 
-async function fetchClubTransfers(clubId: string): Promise<Transfer[]> {
-  try {
-    const res = await fetch(
-      `https://transfermarkt-api.fly.dev/clubs/${clubId}/transfers`,
-      { next: { revalidate: 3600 } }
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
+function parseName(raw: { name?: string } | string | undefined): string {
+  if (!raw) return "-";
+  if (typeof raw === "string") return raw;
+  return raw.name ?? "-";
+}
 
-    type TmTransfer = {
-      id?: string;
-      name?: string;
-      from?: { name?: string };
-      to?: { name?: string };
-      fee?: string;
-      date?: string;
-      position?: string;
-    };
+function parseFee(raw: string | { value?: string; text?: string } | undefined): string {
+  if (!raw) return "미공개";
+  if (typeof raw === "string") return raw || "미공개";
+  return raw.text ?? raw.value ?? "미공개";
+}
 
-    const arrivals: TmTransfer[] = data?.arrivals ?? [];
-    const departures: TmTransfer[] = data?.departures ?? [];
-    const clubName: string = data?.name ?? "";
+async function fetchFotMobTransfers(): Promise<Transfer[]> {
+  const ENDPOINTS = [
+    "https://www.fotmob.com/api/transfers?lang=default",
+    "https://www.fotmob.com/api/transfers",
+  ];
 
-    const toItems = arrivals.slice(0, 2).map((t) => ({
-      id: `${clubId}-a-${t.id ?? t.name}`,
-      name: t.name ?? "Unknown",
-      from: t.from?.name ?? "-",
-      to: clubName,
-      fee: t.fee ?? "미공개",
-      date: t.date ?? "",
-      position: t.position ?? "",
-    }));
+  for (const url of ENDPOINTS) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Accept: "application/json, text/plain, */*",
+          Referer: "https://www.fotmob.com/transfers",
+          "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        },
+        next: { revalidate: 3600 },
+      });
 
-    const fromItems = departures.slice(0, 1).map((t) => ({
-      id: `${clubId}-d-${t.id ?? t.name}`,
-      name: t.name ?? "Unknown",
-      from: clubName,
-      to: t.to?.name ?? "-",
-      fee: t.fee ?? "미공개",
-      date: t.date ?? "",
-      position: t.position ?? "",
-    }));
+      if (!res.ok) continue;
 
-    return [...toItems, ...fromItems];
-  } catch {
-    return [];
+      const data = await res.json();
+
+      // 여러 응답 구조 처리
+      const raw: FotMobRawTransfer[] =
+        data?.transfers?.data ??
+        data?.transfers?.items ??
+        data?.data?.transfers ??
+        data?.data ??
+        data?.transfers ??
+        data?.items ??
+        [];
+
+      if (!Array.isArray(raw) || raw.length === 0) continue;
+
+      return raw.slice(0, 30).flatMap((t): Transfer[] => {
+        const name = t.player?.name ?? t.name;
+        if (!name) return [];
+        return [
+          {
+            id: String(t.id ?? Math.random()),
+            name,
+            from: parseName(t.fromTeam ?? t.from),
+            to: parseName(t.toTeam ?? t.to),
+            fee: parseFee(t.fee),
+            date: t.transferDate ?? t.date ?? "",
+            position: t.player?.positionLabel ?? t.player?.position ?? t.position ?? "",
+          },
+        ];
+      });
+    } catch {
+      continue;
+    }
   }
+
+  return [];
 }
 
 export default async function TransferPage() {
-  const results = await Promise.all(TOP_CLUB_IDS.map(fetchClubTransfers));
-  const transfers = results
-    .flat()
-    .filter((t) => t.name !== "Unknown")
-    .sort((a, b) => (b.date > a.date ? 1 : -1))
-    .slice(0, 30);
+  const transfers = await fetchFotMobTransfers();
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-4 flex gap-4">
@@ -79,13 +107,13 @@ export default async function TransferPage() {
         <div className="bg-white rounded-lg border border-[#e2e8f0] overflow-hidden">
           <div className="px-4 py-3 border-b border-[#e2e8f0]">
             <h1 className="font-bold text-[#0f172a] text-lg">이적시장</h1>
-            <p className="text-xs text-[#64748b] mt-0.5">Transfermarkt 오피셜 이적</p>
+            <p className="text-xs text-[#64748b] mt-0.5">FotMob 최신 이적</p>
           </div>
 
           {transfers.length === 0 ? (
             <div className="px-4 py-16 text-center">
               <div className="text-[#64748b] text-sm">이적 정보를 불러오는 중입니다...</div>
-              <div className="text-xs text-[#94a3b8] mt-2">Transfermarkt API 연결 중</div>
+              <div className="text-xs text-[#94a3b8] mt-2">FotMob 데이터 연결 중</div>
             </div>
           ) : (
             <>

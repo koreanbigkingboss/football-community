@@ -15,7 +15,7 @@ export default async function BettingDetailPage({
   const userId = (session.user as { id?: string }).id!;
 
   const [match, dbUser, existing] = await Promise.all([
-    db.match.findUnique({ where: { id } }),
+    db.match.findUnique({ where: { id }, select: { id: true, homeTeam: true, awayTeam: true, league: true, matchTime: true, status: true, homeTeamBadge: true, awayTeamBadge: true } }),
     db.user.findUnique({ where: { id: userId }, select: { points: true } }),
     db.prediction.findUnique({ where: { userId_matchId: { userId, matchId: id } } }),
   ]);
@@ -31,6 +31,8 @@ export default async function BettingDetailPage({
         league: match.league,
         matchTime: match.matchTime.toISOString(),
         status: match.status,
+        homeTeamBadge: match.homeTeamBadge ?? undefined,
+        awayTeamBadge: match.awayTeamBadge ?? undefined,
       }}
       userPoints={dbUser?.points ?? 0}
       existing={

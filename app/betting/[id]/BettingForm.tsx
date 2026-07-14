@@ -11,6 +11,8 @@ type Match = {
   league: string;
   matchTime: string;
   status: string;
+  homeTeamBadge?: string;
+  awayTeamBadge?: string;
 };
 
 type Existing = {
@@ -96,11 +98,31 @@ export default function BettingForm({
       <div className="bg-white rounded-lg border border-[#e2e8f0] overflow-hidden">
         {/* 경기 정보 헤더 */}
         <div className="px-4 py-4 border-b border-[#e2e8f0] bg-[#0f172a] text-white">
-          <div className="text-xs text-[#94a3b8] mb-1">{match.league}</div>
-          <div className="flex items-center justify-center gap-6 py-2">
-            <span className="text-xl font-bold text-center flex-1">{match.homeTeam}</span>
-            <span className="text-[#94a3b8] font-medium text-sm">VS</span>
-            <span className="text-xl font-bold text-center flex-1">{match.awayTeam}</span>
+          <div className="text-xs text-[#94a3b8] mb-2 text-center">{match.league}</div>
+          <div className="flex items-center justify-center gap-4 py-2">
+            <div className="flex flex-col items-center gap-2 flex-1">
+              {match.homeTeamBadge ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={match.homeTeamBadge} alt={match.homeTeam} className="w-12 h-12 object-contain" />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white font-bold">
+                  {match.homeTeam.charAt(0)}
+                </div>
+              )}
+              <span className="text-sm font-bold text-center leading-tight">{match.homeTeam}</span>
+            </div>
+            <span className="text-[#94a3b8] font-medium text-sm shrink-0">VS</span>
+            <div className="flex flex-col items-center gap-2 flex-1">
+              {match.awayTeamBadge ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={match.awayTeamBadge} alt={match.awayTeam} className="w-12 h-12 object-contain" />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white font-bold">
+                  {match.awayTeam.charAt(0)}
+                </div>
+              )}
+              <span className="text-sm font-bold text-center leading-tight">{match.awayTeam}</span>
+            </div>
           </div>
           <div className="text-center text-xs text-[#94a3b8] mt-1">{matchTime}</div>
         </div>
