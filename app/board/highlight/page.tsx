@@ -3,90 +3,104 @@ import HighlightPlayer from "./HighlightPlayer";
 
 export const dynamic = "force-dynamic";
 
-type VideoItem = {
-  videoId: string;
+export type VideoItem = {
+  embedSrc: string;
   title: string;
   thumbnail: string;
-  published: string;
-  channel: string;
+  competition: string;
+  date: string;
 };
 
-// 5대리그 + UCL + K리그 공식 YouTube 채널
-const CHANNELS = [
-  { id: "UCqZQlzSHbVJrwrn5XvzrzcA", name: "프리미어리그" },
-  { id: "UCTFNGq5eMKRKN0i7h1vPSMw", name: "라리가" },
-  { id: "UCGSbmA1eLbBjz_cKlFfJBqg", name: "분데스리가" },
-  { id: "UCBJeMCIeLQos7wacox4hmLQ", name: "세리에A" },
-  { id: "UC3vTOqc0vQYQA6R0r38xJ4w", name: "리그앙" },
-  { id: "UCwc7FMSzr8e-Vo72V8Rp63A", name: "UEFA" },
-  { id: "UCrfu1VaYOZ_-FBGQMzKFfMA", name: "K리그" },
+type ScorebatVideo = {
+  id: string;
+  title: string;
+  embed: string;
+};
+
+type ScorebatMatch = {
+  title: string;
+  competition: string;
+  date: string;
+  thumbnail?: string;
+  videos?: ScorebatVideo[];
+  video_embed?: string;
+};
+
+const TARGET_KEYWORDS = [
+  "Premier League",
+  "La Liga",
+  "Bundesliga",
+  "Serie A",
+  "Ligue 1",
+  "Champions League",
+  "K League",
 ];
 
-// 경기 하이라이트 영상인지 판별
-function isMatchHighlight(title: string): boolean {
-  const lower = title.toLowerCase();
-  return (
-    lower.includes("highlight") ||
-    lower.includes("하이라이트") ||
-    lower.includes("all goals") ||
-    lower.includes("extended") ||
-    lower.includes("match report") ||
-    lower.includes("matchday") ||
-    lower.includes("goals") ||
-    /\d\s*[-–|]\s*\d/.test(title)
-  );
+function isTargetCompetition(competition: string): boolean {
+  return TARGET_KEYWORDS.some((kw) => competition.includes(kw));
 }
 
-async function fetchChannelVideos(channelId: string, channelName: string): Promise<VideoItem[]> {
+function extractEmbedSrc(embedHtml: string): string {
+  const m = embedHtml.match(
+    /src=['"](https:\/\/www\.scorebat\.com\/embed\/[^'"]+)['"]/
+  );
+  return m ? m[1] : "";
+}
+
+async function fetchHighlights(): Promise<VideoItem[]> {
   try {
-    const res = await fetch(
-      `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
-      { next: { revalidate: 1800 } }
-    );
-    if (!res.ok) return [];
-    const text = await res.text();
-
-    const entries = text.match(/<entry>([\s\S]*?)<\/entry>/g) ?? [];
-    return entries.flatMap((entry) => {
-      const videoId = (entry.match(/<yt:videoId>(.*?)<\/yt:videoId>/) ?? [])[1];
-      const rawTitle = (entry.match(/<title>(.*?)<\/title>/) ?? [])[1] ?? "";
-      const published = (entry.match(/<published>(.*?)<\/published>/) ?? [])[1] ?? "";
-
-      if (!videoId) return [];
-
-      const title = rawTitle
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/<!\[CDATA\[(.*?)\]\]>/g, "$1");
-
-      if (!isMatchHighlight(title)) return [];
-
-      return [
-        {
-          videoId,
-          title,
-          thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-          published: published ? new Date(published).toLocaleDateString("ko-KR") : "",
-          channel: channelName,
-        },
-      ];
+    const res = await fetch("https://www.scorebat.com/video-api/v3/", {
+      next: { revalidate: 1800 },
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Accept: "application/json",
+      },
     });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const items: ScorebatMatch[] = Array.isArray(json)
+      ? json
+      : (json.response ?? json.data ?? []);
+
+    return items
+      .filter((m) => isTargetCompetition(m.competition ?? ""))
+      .map((m) => {
+        const embedHtml = m.videos?.[0]?.embed ?? m.video_embed ?? "";
+        const embedSrc = extractEmbedSrc(embedHtml);
+        return {
+          embedSrc,
+          title: m.title ?? "",
+          thumbnail: m.thumbnail ?? "",
+          competition: m.competition ?? "",
+          date: m.date
+            ? new Date(m.date).toLocaleDateString("ko-KR")
+            : "",
+        };
+      })
+      .filter((v) => v.embedSrc && v.title)
+      .slice(0, 24);
   } catch {
     return [];
   }
 }
 
-export default async function HighlightPage() {
-  const results = await Promise.all(
-    CHANNELS.map((c) => fetchChannelVideos(c.id, c.name))
-  );
+const COMPETITION_LABEL: Record<string, string> = {
+  "ENGLAND: Premier League": "EPL",
+  "SPAIN: La Liga": "라리가",
+  "GERMANY: Bundesliga": "분데스리가",
+  "ITALY: Serie A": "세리에A",
+  "FRANCE: Ligue 1": "리그앙",
+  "EUROPE: Champions League": "UCL",
+  "EUROPE: UEFA Champions League": "UCL",
+};
 
-  const highlights = results
-    .flat()
-    .sort((a, b) => (b.published > a.published ? 1 : -1))
-    .slice(0, 24);
+function competitionLabel(competition: string): string {
+  return COMPETITION_LABEL[competition] ?? competition.split(": ").pop() ?? competition;
+}
+
+export default async function HighlightPage() {
+  const highlights = await fetchHighlights();
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-4 flex gap-4">
@@ -95,7 +109,9 @@ export default async function HighlightPage() {
         <div className="bg-white rounded-lg border border-[#e2e8f0] overflow-hidden">
           <div className="px-4 py-3 border-b border-[#e2e8f0]">
             <h1 className="font-bold text-[#0f172a] text-lg">하이라이트</h1>
-            <p className="text-xs text-[#64748b] mt-0.5">5대리그 · UCL · K리그 공식 경기 영상</p>
+            <p className="text-xs text-[#64748b] mt-0.5">
+              5대리그 · UCL 경기 하이라이트
+            </p>
           </div>
 
           {highlights.length === 0 ? (
@@ -104,8 +120,11 @@ export default async function HighlightPage() {
             </div>
           ) : (
             <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {highlights.map((h) => (
-                <HighlightPlayer key={h.videoId} highlight={h} />
+              {highlights.map((h, i) => (
+                <HighlightPlayer
+                  key={`${h.embedSrc}-${i}`}
+                  highlight={{ ...h, competition: competitionLabel(h.competition) }}
+                />
               ))}
             </div>
           )}

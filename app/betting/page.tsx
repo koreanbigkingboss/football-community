@@ -49,7 +49,14 @@ async function syncUpcomingMatches() {
       if (isNaN(matchTime.getTime())) continue;
 
       const existing = await db.match.findFirst({
-        where: { homeTeam: e.strHomeTeam, awayTeam: e.strAwayTeam },
+        where: {
+          homeTeam: e.strHomeTeam,
+          awayTeam: e.strAwayTeam,
+          matchTime: {
+            gte: new Date(`${e.dateEvent}T00:00:00Z`),
+            lte: new Date(`${e.dateEvent}T23:59:59Z`),
+          },
+        },
       });
       if (!existing) {
         await db.match.create({
@@ -93,15 +100,24 @@ function formatKST(date: Date) {
 export default async function BettingPage() {
   await syncUpcomingMatches();
 
-  const [session, matches] = await Promise.all([
+  const [session, rawMatches] = await Promise.all([
     auth(),
     db.match.findMany({
       where: { status: { in: ["UPCOMING", "LIVE"] } },
       include: { _count: { select: { predictions: true } } },
       orderBy: { matchTime: "asc" },
-      take: 30,
+      take: 60,
     }),
   ]);
+
+  // Deduplicate: keep only the first occurrence of each home+away pair
+  const seen = new Set<string>();
+  const matches = rawMatches.filter((m) => {
+    const key = `${m.homeTeam}|${m.awayTeam}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 30);
 
   const userId = (session?.user as { id?: string } | undefined)?.id;
   const myPredictions = userId
