@@ -20,7 +20,11 @@ export default function Header() {
             { href: "/board/free", label: "자유게시판" },
             { href: "/board/kleague", label: "K리그" },
             { href: "/board/epl", label: "EPL" },
-            { href: "/board/ucl", label: "챔피언스리그" },
+            { href: "/board/laliga", label: "라리가" },
+            { href: "/board/bundesliga", label: "분데스리가" },
+            { href: "/board/seriea", label: "세리에A" },
+            { href: "/board/ligue1", label: "리그앙" },
+            { href: "/board/ucl", label: "UCL" },
             { href: "/board/transfer", label: "이적시장" },
             { href: "/betting", label: "⚡배팅" },
           ].map(({ href, label }) => (

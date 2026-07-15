@@ -7,6 +7,7 @@ const boards = [
   { slug: "laliga", name: "라리가", icon: "🇪🇸" },
   { slug: "bundesliga", name: "분데스리가", icon: "🇩🇪" },
   { slug: "seriea", name: "세리에A", icon: "🇮🇹" },
+  { slug: "ligue1", name: "리그앙", icon: "🇫🇷" },
   { slug: "ucl", name: "챔피언스리그", icon: "⭐" },
   { slug: "transfer", name: "이적시장", icon: "🔄" },
   { slug: "highlight", name: "하이라이트", icon: "🎬" },

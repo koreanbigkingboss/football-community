@@ -11,13 +11,15 @@ type VideoItem = {
   channel: string;
 };
 
-// 검증된 공식 YouTube 채널만 사용
+// 5대리그 + UCL + K리그 공식 YouTube 채널
 const CHANNELS = [
   { id: "UCqZQlzSHbVJrwrn5XvzrzcA", name: "프리미어리그" },
   { id: "UCTFNGq5eMKRKN0i7h1vPSMw", name: "라리가" },
   { id: "UCGSbmA1eLbBjz_cKlFfJBqg", name: "분데스리가" },
+  { id: "UCBJeMCIeLQos7wacox4hmLQ", name: "세리에A" },
+  { id: "UC3vTOqc0vQYQA6R0r38xJ4w", name: "리그앙" },
   { id: "UCwc7FMSzr8e-Vo72V8Rp63A", name: "UEFA" },
-  { id: "UCKSFuSRoHfGnMGTRjPZK9BA", name: "챔피언스리그" },
+  { id: "UCrfu1VaYOZ_-FBGQMzKFfMA", name: "K리그" },
 ];
 
 // 경기 하이라이트 영상인지 판별
@@ -93,7 +95,7 @@ export default async function HighlightPage() {
         <div className="bg-white rounded-lg border border-[#e2e8f0] overflow-hidden">
           <div className="px-4 py-3 border-b border-[#e2e8f0]">
             <h1 className="font-bold text-[#0f172a] text-lg">하이라이트</h1>
-            <p className="text-xs text-[#64748b] mt-0.5">EPL · 라리가 · 분데스리가 · UCL 공식 경기 영상</p>
+            <p className="text-xs text-[#64748b] mt-0.5">5대리그 · UCL · K리그 공식 경기 영상</p>
           </div>
 
           {highlights.length === 0 ? (

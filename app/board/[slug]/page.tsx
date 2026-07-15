@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 const BOARD_NAMES: Record<string, string> = {
   free: "자유게시판",
   kleague: "K리그",
@@ -12,8 +14,20 @@ const BOARD_NAMES: Record<string, string> = {
   bundesliga: "분데스리가",
   seriea: "세리에A",
   ucl: "챔피언스리그",
+  ligue1: "리그앙",
   transfer: "이적시장",
   highlight: "하이라이트",
+};
+
+const LEAGUE_TEAMS: Record<string, string[]> = {
+  kleague: ["전북", "울산", "서울", "수원", "포항", "인천", "광주", "제주", "대전", "강원", "대구", "수원FC"],
+  epl: ["아스날", "첼시", "리버풀", "맨시티", "맨유", "토트넘", "뉴캐슬", "아스톤빌라", "웨스트햄", "에버턴", "브라이튼", "풀럼"],
+  laliga: ["레알마드리드", "바르셀로나", "아틀레티코", "세비야", "발렌시아", "레알베티스", "빌바오", "소시에다드"],
+  bundesliga: ["바이에른", "도르트문트", "라이프치히", "레버쿠젠", "프랑크푸르트", "볼프스부르크", "샬케", "마인츠"],
+  seriea: ["유벤투스", "AC밀란", "인테르", "나폴리", "로마", "라치오", "피오렌티나", "아탈란타", "토리노"],
+  ligue1: ["PSG", "모나코", "마르세유", "리옹", "릴", "니스", "렌", "스트라스부르", "낭트"],
+  ucl: [],
+  free: [],
 };
 
 export default async function BoardPage({
@@ -21,33 +35,44 @@ export default async function BoardPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; team?: string }>;
 }) {
   const { slug } = await params;
 
-  // 전용 페이지가 있는 슬러그는 해당 페이지로
   if (slug === "transfer") redirect("/board/transfer");
   if (slug === "highlight") redirect("/board/highlight");
 
-  const { page: pageParam } = await searchParams;
+  const { page: pageParam, team: selectedTeam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
   const PAGE_SIZE = 20;
   const boardName = BOARD_NAMES[slug] ?? slug;
+  const teams = LEAGUE_TEAMS[slug] ?? [];
 
   const [session, board] = await Promise.all([
     auth(),
     db.board.findUnique({ where: { slug } }),
   ]);
-  const posts = board
-    ? await db.post.findMany({
-        where: { boardId: board.id },
-        include: { author: { select: { name: true } }, _count: { select: { comments: true } } },
-        orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
-        skip: (page - 1) * PAGE_SIZE,
-        take: PAGE_SIZE,
-      })
-    : [];
-  const total = board ? await db.post.count({ where: { boardId: board.id } }) : 0;
+
+  const where = board
+    ? {
+        boardId: board.id,
+        ...(selectedTeam ? { teamTag: selectedTeam } : {}),
+      }
+    : {};
+
+  const [posts, total] = board
+    ? await Promise.all([
+        db.post.findMany({
+          where,
+          include: { author: { select: { name: true } }, _count: { select: { comments: true } } },
+          orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+          skip: (page - 1) * PAGE_SIZE,
+          take: PAGE_SIZE,
+        }),
+        db.post.count({ where }),
+      ])
+    : [[], 0];
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
@@ -69,10 +94,43 @@ export default async function BoardPage({
             )}
           </div>
 
+          {/* 팀 탭 */}
+          {teams.length > 0 && (
+            <div className="px-3 py-2 border-b border-[#e2e8f0] overflow-x-auto">
+              <div className="flex gap-1 min-w-max">
+                <Link
+                  href={`/board/${slug}`}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${
+                    !selectedTeam
+                      ? "bg-[#16a34a] text-white"
+                      : "text-[#475569] hover:bg-[#f1f5f9]"
+                  }`}
+                >
+                  전체
+                </Link>
+                {teams.map((team) => (
+                  <Link
+                    key={team}
+                    href={`/board/${slug}?team=${encodeURIComponent(team)}`}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${
+                      selectedTeam === team
+                        ? "bg-[#16a34a] text-white"
+                        : "text-[#475569] hover:bg-[#f1f5f9]"
+                    }`}
+                  >
+                    {team}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 글 목록 */}
           {posts.length === 0 ? (
             <div className="px-4 py-16 text-center text-[#64748b] text-sm">
-              아직 게시글이 없습니다. 첫 글을 작성해보세요!
+              {selectedTeam
+                ? `${selectedTeam} 관련 게시글이 없습니다.`
+                : "아직 게시글이 없습니다. 첫 글을 작성해보세요!"}
             </div>
           ) : (
             <>
@@ -92,6 +150,11 @@ export default async function BoardPage({
                       {post.isPinned && (
                         <span className="text-xs text-white bg-[#16a34a] rounded px-1.5 py-0.5 shrink-0">
                           공지
+                        </span>
+                      )}
+                      {"teamTag" in post && post.teamTag && (
+                        <span className="text-xs text-[#16a34a] bg-[#dcfce7] rounded px-1.5 py-0.5 shrink-0">
+                          {post.teamTag}
                         </span>
                       )}
                       <span className="flex-1 text-sm text-[#1e293b] group-hover:text-[#16a34a] truncate">
@@ -114,7 +177,7 @@ export default async function BoardPage({
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                   <Link
                     key={p}
-                    href={`/board/${slug}?page=${p}`}
+                    href={`/board/${slug}?${selectedTeam ? `team=${encodeURIComponent(selectedTeam)}&` : ""}page=${p}`}
                     className={`w-8 h-8 flex items-center justify-center rounded text-sm transition-colors ${
                       p === page
                         ? "bg-[#16a34a] text-white font-medium"

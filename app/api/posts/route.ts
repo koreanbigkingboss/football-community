@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
-  const { title, content, boardSlug } = await req.json();
+  const { title, content, boardSlug, teamTag } = await req.json();
   if (!title?.trim() || !content?.trim() || !boardSlug) {
     return NextResponse.json({ error: "제목, 내용, 게시판을 모두 입력해주세요." }, { status: 400 });
   }
@@ -19,7 +19,13 @@ export async function POST(req: NextRequest) {
   }
 
   const post = await db.post.create({
-    data: { title: title.trim(), content: content.trim(), boardId: board.id, authorId: session.user.id },
+    data: {
+      title: title.trim(),
+      content: content.trim(),
+      boardId: board.id,
+      authorId: session.user.id,
+      ...(teamTag ? { teamTag } : {}),
+    },
   });
 
   return NextResponse.json({ id: post.id }, { status: 201 });

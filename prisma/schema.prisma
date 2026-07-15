@@ -66,6 +66,7 @@ model Post {
   content   String
   boardId   String
   authorId  String
+  teamTag   String?
   views     Int       @default(0)
   likes     Int       @default(0)
   isPinned  Boolean   @default(false)
