@@ -11,15 +11,13 @@ type VideoItem = {
   channel: string;
 };
 
-// 5대리그 + K리그 공식 YouTube 채널
+// 검증된 공식 YouTube 채널만 사용
 const CHANNELS = [
   { id: "UCqZQlzSHbVJrwrn5XvzrzcA", name: "프리미어리그" },
   { id: "UCTFNGq5eMKRKN0i7h1vPSMw", name: "라리가" },
   { id: "UCGSbmA1eLbBjz_cKlFfJBqg", name: "분데스리가" },
-  { id: "UCGpQjFxILsFfZBh_gHkODmw", name: "세리에A" },
-  { id: "UCo_oG5r9y7fLz3C4mMjT3yQ", name: "리그앙" },
   { id: "UCwc7FMSzr8e-Vo72V8Rp63A", name: "UEFA" },
-  { id: "UC3UiP3sAGGiKwKvABcS0S0Q", name: "K리그" },
+  { id: "UCKSFuSRoHfGnMGTRjPZK9BA", name: "챔피언스리그" },
 ];
 
 // 경기 하이라이트 영상인지 판별
@@ -28,12 +26,12 @@ function isMatchHighlight(title: string): boolean {
   return (
     lower.includes("highlight") ||
     lower.includes("하이라이트") ||
-    lower.includes("goals") ||
+    lower.includes("all goals") ||
     lower.includes("extended") ||
     lower.includes("match report") ||
-    lower.includes("all goals") ||
     lower.includes("matchday") ||
-    /\d\s*[-–|]\s*\d/.test(title) // 스코어 패턴 (예: 2-1, 3 – 0)
+    lower.includes("goals") ||
+    /\d\s*[-–|]\s*\d/.test(title)
   );
 }
 
@@ -61,7 +59,6 @@ async function fetchChannelVideos(channelId: string, channelName: string): Promi
         .replace(/&quot;/g, '"')
         .replace(/<!\[CDATA\[(.*?)\]\]>/g, "$1");
 
-      // 경기 하이라이트 영상만 포함
       if (!isMatchHighlight(title)) return [];
 
       return [
@@ -84,7 +81,6 @@ export default async function HighlightPage() {
     CHANNELS.map((c) => fetchChannelVideos(c.id, c.name))
   );
 
-  // 최신순 정렬
   const highlights = results
     .flat()
     .sort((a, b) => (b.published > a.published ? 1 : -1))
@@ -97,7 +93,7 @@ export default async function HighlightPage() {
         <div className="bg-white rounded-lg border border-[#e2e8f0] overflow-hidden">
           <div className="px-4 py-3 border-b border-[#e2e8f0]">
             <h1 className="font-bold text-[#0f172a] text-lg">하이라이트</h1>
-            <p className="text-xs text-[#64748b] mt-0.5">5대리그 · K리그 공식 경기 영상</p>
+            <p className="text-xs text-[#64748b] mt-0.5">EPL · 라리가 · 분데스리가 · UCL 공식 경기 영상</p>
           </div>
 
           {highlights.length === 0 ? (
