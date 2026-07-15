@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import Sidebar from "@/app/components/Sidebar";
+import TeamBadge from "./TeamBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -88,30 +89,6 @@ function formatKST(date: Date) {
   }).format(date);
 }
 
-function TeamBadge({ src, name }: { src?: string | null; name: string }) {
-  const initial = name.charAt(0).toUpperCase();
-  if (!src) {
-    return (
-      <div className="w-8 h-8 rounded-full bg-[#e2e8f0] flex items-center justify-center text-[#475569] text-xs font-bold shrink-0">
-        {initial}
-      </div>
-    );
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={name}
-      className="w-8 h-8 object-contain shrink-0"
-      onError={(e) => {
-        const target = e.currentTarget;
-        target.style.display = "none";
-        const sibling = target.nextElementSibling as HTMLElement | null;
-        if (sibling) sibling.style.display = "flex";
-      }}
-    />
-  );
-}
 
 export default async function BettingPage() {
   await syncUpcomingMatches();
